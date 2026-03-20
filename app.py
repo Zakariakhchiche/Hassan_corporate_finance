@@ -72,7 +72,8 @@ def get_best_chunks(query, chunks, k=40):
     # Filter unique contents to avoid duplicates
     seen = set()
     unique_results = []
-    for s, c in sorted(scored_chunks, key=lambda x: x[1], reverse=True):
+    # Sort by score (x[0]) instead of chunk (x[1])
+    for s, c in sorted(scored_chunks, key=lambda x: x[0], reverse=True):
         if c['content'] not in seen:
             unique_results.append((s, c))
             seen.add(c['content'])
