@@ -10,7 +10,10 @@ st.set_page_config(page_title="Hassan Corporate RAG", page_icon="🦍")
 
 # Sidebar - API Settings
 st.sidebar.title("⚙️ Configuration")
-api_key = st.sidebar.text_input("Clé API DeepSeek :", type="password")
+
+# Handle secrets
+default_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+api_key = st.sidebar.text_input("Clé API DeepSeek :", value=default_key, type="password")
 model_name = st.sidebar.selectbox("Modèle :", ["deepseek-chat", "deepseek-coder"])
 
 st.title("🦍 Hassan Corporate RAG")

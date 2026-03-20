@@ -5,3 +5,4 @@ downloads/
 *.log
 linkedin_images/
 extension_chrome/
+.streamlit/secrets.toml
