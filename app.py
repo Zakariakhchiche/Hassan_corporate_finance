@@ -2,22 +2,23 @@ import streamlit as st
 import os
 import glob
 from openai import OpenAI
+import collections
+import math
 
 # Configuration
 DATA_DIRS = ["scraped_annuaire", "scraped_fusacq", "scraped_fusacq_regions"]
 
-st.set_page_config(page_title="Hassan Corporate RAG", page_icon="🦍")
+st.set_page_config(page_title="Hassan Corporate RAG", page_icon="🦍", layout="wide")
 
 # Sidebar - API Settings
 st.sidebar.title("⚙️ Configuration")
-
-# Handle secrets
 default_key = st.secrets.get("DEEPSEEK_API_KEY", "")
 api_key = st.sidebar.text_input("Clé API DeepSeek :", value=default_key, type="password")
 model_name = st.sidebar.selectbox("Modèle :", ["deepseek-chat", "deepseek-coder"])
+top_k = st.sidebar.slider("Nombre de sources à analyser :", 5, 30, 15)
 
-st.title("🦍 Hassan Corporate RAG")
-st.subheader("Base de données Intelligence Corporate & M&A")
+st.title("🦍 Hassan Corporate RAG v2")
+st.subheader("Intelligence de Marché - Analyse de 217 sources")
 
 # Load data
 @st.cache_data
@@ -38,51 +39,75 @@ def load_data():
 
 data = load_data()
 
+# Simple TF-IDF like scoring
+def get_scores(query, data):
+    words = query.lower().split()
+    scores = collections.defaultdict(float)
+    
+    # Calculate global word frequency to identify "rare" words (more important)
+    all_text = " ".join(data.values()).lower()
+    total_words = len(all_text.split())
+    
+    for word in words:
+        if len(word) < 3: continue
+        word_count = all_text.count(word)
+        # Weight = log(Total / (1 + Count))
+        weight = math.log(total_words / (1 + word_count))
+        
+        for name, text in data.items():
+            if word in text.lower():
+                # Count occurrences in this document
+                occ = text.lower().count(word)
+                scores[name] += occ * weight
+                
+    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
 # Search & Chat
-query = st.text_input("Posez votre question en langage naturel (RAG) :", "")
+query = st.text_input("Posez votre question (Hassan analysera les meilleures sources correspondantes) :", "")
 
 if query:
-    st.write(f"### Analyse pour : *{query}*")
+    st.write(f"🔍 **Hassan scanne la base de données...**")
     
-    # 1. Retrieval (Simple Keyword Scoring)
-    results = []
-    for name, text in data.items():
-        score = sum(1 for word in query.lower().split() if word in text.lower())
-        if score > 0:
-            results.append((score, name))
-    
-    results = sorted(results, key=lambda x: x[0], reverse=True)[:5] # Top 5
+    # 1. Retrieval
+    results = get_scores(query, data)[:top_k]
     
     if results:
-        context = "\n\n".join([f"--- {name} ---\n{data[name][:2000]}" for score, name in results])
+        # 2. Context Building (Increased to 3000 chars per source)
+        context_parts = []
+        for name, score in results:
+            context_parts.append(f"SOURCE: {name.upper()}\nCONTENT: {data[name][:3000]}")
+        
+        context = "\n\n---\n\n".join(context_parts)
         
         if api_key:
             try:
                 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
                 
-                with st.spinner("🧠 DeepSeek est en train de rédiger la synthèse..."):
+                with st.spinner(f"🧠 Analyse de {len(results)} sources par DeepSeek..."):
                     response = client.chat.completions.create(
                         model=model_name,
                         messages=[
-                            {"role": "system", "content": "Tu es Hassan, un assistant expert en Corporate Finance. Réponds à la question en utilisant uniquement le contexte fourni. Sois précis et professionnel."},
-                            {"role": "user", "content": f"CONTEXTE:\n{context}\n\nQUESTION: {query}"}
+                            {"role": "system", "content": "Tu es Hassan, un assistant expert en Corporate Finance. Réponds de manière exhaustive en utilisant le contexte fourni. Si une information n'est pas dans le contexte, dis-le. Structure ta réponse avec des puces."},
+                            {"role": "user", "content": f"Voici les fiches extraites pour répondre à la question.\n\n{context}\n\nQUESTION: {query}"}
                         ],
                         stream=False
                     )
-                    st.markdown("#### 🤖 Réponse de Hassan :")
+                    st.markdown("### 🦍 Réponse de Hassan :")
                     st.write(response.choices[0].message.content)
             except Exception as e:
                 st.error(f"Erreur API DeepSeek : {e}")
-        else:
-            st.info("💡 Clé API manquante dans la barre latérale. Voici les sources pertinentes trouvées :")
         
-        for score, m in results:
-            with st.expander(f"📍 Source : {m.upper()}"):
-                st.markdown(data[m])
+        st.markdown("---")
+        st.write("📂 **Sources analysées pour cette réponse :**")
+        cols = st.columns(3)
+        for idx, (name, score) in enumerate(results):
+            with cols[idx % 3]:
+                with st.expander(f"📄 {name.upper()}"):
+                    st.markdown(data[name])
     else:
-        st.warning("Aucun résultat pertinent trouvé dans la base de données.")
+        st.warning("Aucun résultat pertinent trouvé.")
 
 # Sidebar info
 st.sidebar.markdown("---")
 st.sidebar.info(f"📊 **Statistiques**\n- Fiches indexées : {len(data)}")
-st.sidebar.write("Développé par Hassan 🦍")
+st.sidebar.write("Hassan v2.0 🦍")
