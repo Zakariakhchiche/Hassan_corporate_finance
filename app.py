@@ -46,10 +46,13 @@ def load_and_chunk_data():
             with open(f, "r", encoding="utf-8") as file:
                 name = os.path.basename(f).replace(".md", "")
                 text = file.read()
+                # Split by double newline or single newline if paragraphs are very long
                 paragraphs = re.split(r'\n\s*\n', text)
                 for p in paragraphs:
-                    if len(p.strip()) > 50:
-                        chunks.append({"source": name, "content": p.strip()})
+                    stripped = p.strip()
+                    if len(stripped) > 50:
+                        # Limit chunk size to avoid context overflow
+                        chunks.append({"source": name, "content": stripped[:2000]})
         except: pass
     return chunks
 
@@ -66,7 +69,15 @@ def get_best_chunks(query, chunks, k=40):
             if word in chunk['source'].lower(): score += 2
         if score > 0:
             scored_chunks.append((score, chunk))
-    return sorted(scored_chunks, key=lambda x: x[1], reverse=True)[:k]
+    # Filter unique contents to avoid duplicates
+    seen = set()
+    unique_results = []
+    for s, c in sorted(scored_chunks, key=lambda x: x[1], reverse=True):
+        if c['content'] not in seen:
+            unique_results.append((s, c))
+            seen.add(c['content'])
+            if len(unique_results) >= k: break
+    return unique_results
 
 # Session State for Chat
 if "messages" not in st.session_state:
@@ -79,12 +90,10 @@ for message in st.session_state.messages:
 
 # Chat Input
 if prompt := st.chat_input("Comment puis-je vous aider ?"):
-    # Add user message to history
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Retrieval
     results = get_best_chunks(prompt, all_chunks, k=top_k_chunks)
     
     with st.chat_message("assistant", avatar="🦍"):
@@ -104,7 +113,6 @@ if prompt := st.chat_input("Comment puis-je vous aider ?"):
                     response_placeholder = st.empty()
                     full_response = ""
                     
-                    # Call DeepSeek
                     completion = client.chat.completions.create(
                         model=model_name,
                         messages=[
@@ -115,13 +123,11 @@ if prompt := st.chat_input("Comment puis-je vous aider ?"):
                     )
                     
                     for chunk in completion:
-                        if chunk.choices[0].delta.content:
+                        if len(chunk.choices) > 0 and chunk.choices[0].delta.content:
                             full_response += chunk.choices[0].delta.content
                             response_placeholder.markdown(full_response + "▌")
                     
                     response_placeholder.markdown(full_response)
-                    
-                    # Add to history
                     st.session_state.messages.append({"role": "assistant", "content": full_response})
                     
                     with st.expander("📚 Sources utilisées"):
