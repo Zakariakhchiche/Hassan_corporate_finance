@@ -6,5 +6,8 @@
   "routes": [
     { "src": "/api/chat", "dest": "api/chat.py" },
     { "src": "/(.*)", "dest": "app/$1" }
-  ]
+  ],
+  "env": {
+    "DEEPSEEK_API_KEY": "@deepseek-api-key"
+  }
 }
