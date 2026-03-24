@@ -1,5 +1,2 @@
-streamlit==1.55.0
-pandas
-altair
-watchdog
 openai
+PyPDF2
