@@ -7,7 +7,7 @@ import math
 import re
 
 # Configuration
-DATA_DIRS = ["scraped_annuaire", "scraped_fusacq", "scraped_fusacq_regions", "scraped_cfnews"]
+DATA_DIRS = ["scraped_annuaire", "scraped_fusacq", "scraped_fusacq_regions", "scraped_cfnews", "scraped_rag_pdfs"]
 
 st.set_page_config(page_title="Hassan Chat - Corporate Finance", page_icon="🦍", layout="centered")
 
