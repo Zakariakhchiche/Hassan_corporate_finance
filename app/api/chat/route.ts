@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
     const { message } = await request.json()
     
     // Call the Python backend
-    const response = await fetch('http://localhost:8000/chat', {
+    const response = await fetch('https://hassan-corporate-finance.vercel.app/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })

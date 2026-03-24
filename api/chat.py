@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 import os
@@ -7,13 +8,19 @@ import re
 
 app = FastAPI()
 
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 DATA_DIRS = ["scraped_annuaire", "scraped_fusacq", "scraped_fusacq_regions", "scraped_cfnews", "scraped_rag_pdfs"]
 
 class ChatRequest(BaseModel):
     message: str
-    apiKey: str
-    model: str = "deepseek-chat"
-    topK: int = 40
 
 def load_and_chunk_data():
     files = []
@@ -55,11 +62,11 @@ def get_best_chunks(query, chunks, k=40):
             if len(unique_results) >= k: break
     return unique_results
 
-@app.post("/chat")
+@app.post("/api/chat")
 async def chat(request: ChatRequest):
     try:
         chunks = load_and_chunk_data()
-        results = get_best_chunks(request.message, chunks, k=request.topK)
+        results = get_best_chunks(request.message, chunks, k=40)
         
         if not results:
             return {"response": "Désolé, je ne trouve pas d'informations pertinentes dans ma base de données. 🦍", "sources": []}
@@ -72,10 +79,14 @@ async def chat(request: ChatRequest):
         
         context = "\n\n---\n\n".join(context_parts)
         
-        client = OpenAI(api_key=request.apiKey, base_url="https://api.deepseek.com")
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="DEEPSEEK_API_KEY not set")
+        
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
         
         completion = client.chat.completions.create(
-            model=request.model,
+            model="deepseek-chat",
             messages=[
                 {"role": "system", "content": "Tu es Hassan, un gorille assistant expert en Corporate Finance. Réponds de manière exhaustive et professionnelle en utilisant le contexte fourni. Signe toujours avec 🦍."},
                 {"role": "user", "content": f"CONTEXTE:\n{context}\n\nQUESTION: {request.message}"}
@@ -88,3 +99,7 @@ async def chat(request: ChatRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/")
+async def root():
+    return {"message": "Hassan Corporate RAG API"}
